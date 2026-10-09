@@ -1,0 +1,29 @@
+
+name: Build Emerald DS
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:20260610
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Compile Nintendo DS game
+        run: |
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=/opt/devkitpro/devkitARM
+          make
+
+      - name: Upload NDS game
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emerald-DS
+          path: "*.nds"
+          if-no-files-found: error
