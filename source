@@ -1,0 +1,106 @@
+#include <nds.h>
+#include <stdio.h>
+#include <string.h>
+
+/* Emerald DS Edition — milestone 0, original placeholder graphics only.
+   Both screens use the libnds text BG. No GBA emulation or game code yet. */
+
+static PrintConsole upper, lower;
+static int playerX = 15, playerY = 10;
+static int menu = 0;
+static bool running = false;
+static int frames = 0;
+
+static void line_at(int x, int y, const char *text) {
+    iprintf("\x1b[%d;%dH%s", y, x, text);
+}
+
+static void upper_draw(void) {
+    consoleSelect(&upper);
+    consoleClear();
+    line_at(2, 1, "EMERALD DS  /  PROTOTYPE");
+    line_at(2, 2, "----------------------------");
+    line_at(2, 4, "ROUTE 101  -  test environment");
+    for (int y = 0; y < 12; y++) {
+        char row[29];
+        for (int x = 0; x < 28; x++) {
+            int edge = (x == 0 || x == 27 || y == 0 || y == 11);
+            int grass = ((x * 7 + y * 11) % 13 < 3);
+            row[x] = edge ? '#' : (grass ? ':' : '.');
+        }
+        row[28] = '\0';
+        if (playerY == y) row[playerX] = '@';
+        line_at(2, 6 + y, row);
+    }
+    line_at(2, 19, "D-PAD: move    B: run toggle");
+    line_at(2, 20, "@: player  # : border");
+    line_at(2, 22, "Original demo; not Emerald yet");
+}
+
+static const char *menu_names[] = {"MAP", "PARTY", "BAG", "POKEDEX"};
+
+static void lower_draw(void) {
+    consoleSelect(&lower);
+    consoleClear();
+    line_at(2, 1, "   EMERALD DS  /  TOUCH UI");
+    line_at(2, 2, "----------------------------");
+    for (int i = 0; i < 4; i++) {
+        char label[32];
+        snprintf(label, sizeof(label), "%c  [ %-8s ]", i == menu ? '>' : ' ', menu_names[i]);
+        line_at(6, 4 + i * 3, label);
+    }
+    line_at(2, 17, "----------------------------");
+    if (menu == 0) {
+        line_at(2, 18, "MAP: Route 101 / Hoenn");
+    } else if (menu == 1) {
+        line_at(2, 18, "PARTY: no Pokemon loaded");
+    } else if (menu == 2) {
+        line_at(2, 18, "BAG: no items loaded");
+    } else {
+        line_at(2, 18, "POKEDEX: no data loaded");
+    }
+    line_at(2, 21, "Tap a menu row to select");
+    line_at(2, 22, running ? "Movement: RUN" : "Movement: WALK");
+}
+
+int main(void) {
+    videoSetMode(MODE_0_2D);
+    videoSetModeSub(MODE_0_2D);
+    vramSetBankA(VRAM_A_MAIN_BG);
+    vramSetBankC(VRAM_C_SUB_BG);
+
+    consoleInit(&upper, 0, BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
+    consoleInit(&lower, 0, BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
+    upper_draw();
+    lower_draw();
+
+    while (1) {
+        swiWaitForVBlank();
+        scanKeys();
+        int down = keysDown();
+        int held = keysHeld();
+        bool changedTop = false;
+        bool changedBottom = false;
+
+        int step = (running && (++frames % 2 == 0)) ? 2 : 1;
+        if ((held & KEY_LEFT) && playerX > 1) { playerX -= step; if (playerX < 1) playerX = 1; changedTop = true; }
+        if ((held & KEY_RIGHT) && playerX < 26) { playerX += step; if (playerX > 26) playerX = 26; changedTop = true; }
+        if ((held & KEY_UP) && playerY > 1) { playerY -= step; if (playerY < 1) playerY = 1; changedTop = true; }
+        if ((held & KEY_DOWN) && playerY < 10) { playerY += step; if (playerY > 10) playerY = 10; changedTop = true; }
+        if (down & KEY_B) { running = !running; changedBottom = true; }
+        if (down & KEY_TOUCH) {
+            touchPosition touch;
+            touchRead(&touch);
+            int row = touch.py / 8;
+            for (int i = 0; i < 4; i++) {
+                if (row >= 4 + 3 * i && row <= 5 + 3 * i) {
+                    menu = i;
+                    changedBottom = true;
+                    break;
+                }
+            }
+        }
+        if (changedTop) upper_draw();
+        if (changedBottom) lower_draw();
+    }
+}
